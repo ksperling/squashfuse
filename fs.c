@@ -286,7 +286,7 @@ sqfs_err sqfs_readlink(sqfs *fs, sqfs_inode *inode, char *buf, size_t *size) {
 	if (!S_ISLNK(inode->base.mode))
 		return SQFS_ERR;
 
-	want = inode->xtra.symlink_size;
+	want = inode->xtra.symlink_size + 1;
 	if (!buf) {
 		*size = want;
 		return SQFS_OK;

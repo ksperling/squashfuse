@@ -252,7 +252,7 @@ static void sqfs_ll_op_readlink(fuse_req_t req, fuse_ino_t ino) {
 		fuse_reply_err(req, EINVAL);
 	} else if (sqfs_readlink(&lli.ll->fs, &lli.inode, NULL, &size)) {
 		fuse_reply_err(req, EIO);
-	} else if (!(dst = malloc(size + 1))) {
+	} else if (!(dst = malloc(size))) {
 		fuse_reply_err(req, ENOMEM);
 	} else if (sqfs_readlink(&lli.ll->fs, &lli.inode, dst, &size)) {
 		fuse_reply_err(req, EIO);
