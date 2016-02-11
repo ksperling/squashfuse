@@ -58,28 +58,34 @@ sqfs_err sqfs_init(sqfs *fs, sqfs_fd_t fd) {
 	memset(fs, 0, sizeof(*fs));
 	
 	fs->fd = fd;
-	if (sqfs_pread(fd, &fs->sb, sizeof(fs->sb), 0) != sizeof(fs->sb))
-		return SQFS_BADFORMAT;
-	sqfs_swapin_super_block(&fs->sb);
-	
-	if (fs->sb.s_magic != SQUASHFS_MAGIC) {
-		if (fs->sb.s_magic != SQFS_MAGIC_SWAP)
+	for (fs->fd_offset = 0; ; fs->fd_offset += 512) {
+		if (sqfs_pread(fd, &fs->sb, sizeof(fs->sb), fs->fd_offset) != sizeof(fs->sb))
 			return SQFS_BADFORMAT;
-		sqfs_swap16(&fs->sb.s_major);
-		sqfs_swap16(&fs->sb.s_minor);
+		sqfs_swapin_super_block(&fs->sb);
+
+		if (fs->sb.s_magic == SQUASHFS_MAGIC) break;
+		if (fs->sb.s_magic == SQFS_MAGIC_SWAP) {
+			sqfs_swap16(&fs->sb.s_major);
+			sqfs_swap16(&fs->sb.s_minor);
+			break;
+		}
 	}
+
 	if (fs->sb.s_major != SQUASHFS_MAJOR || fs->sb.s_minor > SQUASHFS_MINOR)
 		return SQFS_BADVERSION;
 	
 	if (!(fs->decompressor = sqfs_decompressor_get(fs->sb.compression)))
 		return SQFS_BADCOMP;
 	
-	err = sqfs_table_init(&fs->id_table, fd, fs->sb.id_table_start,
+	err = sqfs_table_init(&fs->id_table, fd,
+		fs->fd_offset + fs->sb.id_table_start,
 		sizeof(uint32_t), fs->sb.no_ids);
-	err |= sqfs_table_init(&fs->frag_table, fd, fs->sb.fragment_table_start,
+	err |= sqfs_table_init(&fs->frag_table, fd,
+		fs->fd_offset + fs->sb.fragment_table_start,
 		sizeof(struct squashfs_fragment_entry), fs->sb.fragments);
 	if (sqfs_export_ok(fs)) {
-		err |= sqfs_table_init(&fs->export_table, fd, fs->sb.lookup_table_start,
+		err |= sqfs_table_init(&fs->export_table, fd,
+			fs->fd_offset + fs->sb.lookup_table_start,
 			sizeof(uint64_t), fs->sb.inodes);
 	}
 	err |= sqfs_xattr_init(fs);
@@ -126,7 +132,7 @@ sqfs_err sqfs_block_read(sqfs *fs, sqfs_off_t pos, bool compressed,
 	if (!((*block)->data = malloc(size)))
 		goto error;
 	
-	if (sqfs_pread(fs->fd, (*block)->data, size, pos) != size)
+	if (sqfs_pread(fs->fd, (*block)->data, size, fs->fd_offset + pos) != size)
 		goto error;
 
 	if (compressed) {
@@ -163,7 +169,7 @@ sqfs_err sqfs_md_block_read(sqfs *fs, sqfs_off_t pos, size_t *data_size,
 	
 	*data_size = 0;
 	
-	if (sqfs_pread(fs->fd, &hdr, sizeof(hdr), pos) != sizeof(hdr))
+	if (sqfs_pread(fs->fd, &hdr, sizeof(hdr), fs->fd_offset + pos) != sizeof(hdr))
 		return SQFS_ERR;
 	pos += sizeof(hdr);
 	*data_size += sizeof(hdr);
