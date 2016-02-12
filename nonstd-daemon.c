@@ -34,7 +34,7 @@ int sqfs_ll_daemonize(int fg) {
 	#if HAVE_DECL_FUSE_DAEMONIZE
 		return fuse_daemonize(fg);
 	#else
-		return daemon(0,0);
+		return (!fg) ? daemon(0,0) : 0;
 	#endif
 }
 
